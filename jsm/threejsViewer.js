@@ -27,7 +27,7 @@ class threejsViewer {
         // Light
         let directionalLight = new THREE.DirectionalLight(0xffffff, 1)
         directionalLight.position.set(1, 1, 1)
-        
+
         this.scene.add(directionalLight)
         this.scene.add(new THREE.HemisphereLight(0x443333, 0x111122))
 
@@ -39,7 +39,7 @@ class threejsViewer {
         controller.addEventListener('change', () => {
             this.renderScene()
         })
-        
+
         //Axis Landmark
         const axesHelper = new THREE.AxesHelper(100)
         this.scene.add(axesHelper)
@@ -47,12 +47,12 @@ class threejsViewer {
         // Ground
         const plane = new THREE.Mesh(
             new THREE.CircleGeometry(2, 30),
-            new THREE.MeshPhongMaterial({ color: 0xbbddff, opacity:0.4, transparent: true })
+            new THREE.MeshPhongMaterial({ color: 0xbbddff, opacity: 0.4, transparent: true })
         );
         plane.rotation.x = - Math.PI / 2;
         this.scene.add(plane);
 
-        this.renderScene = function() {
+        this.renderScene = function () {
 
             //render scene
             this.renderer.render(this.scene, this.camera);
@@ -87,7 +87,7 @@ class threejsViewer {
             }
         }
 
-        //¥Ñ¼v¹³¸ê®Æ¥Í¦¨¼Ò«¬
+        //ï¿½Ñ¼vï¿½ï¿½ï¿½ï¿½Æ¥Í¦ï¿½ï¿½Ò«ï¿½
         this.renderVolume = function (volume, colormap, arg) {
 
             const name = 'volume'
@@ -98,11 +98,69 @@ class threejsViewer {
 
             if (mesh == null) {
                 //first time initial
+                let geo = new THREE.BoxGeometry(dims[0], dims[1], dims[2])
+                geo.translate(dims[0] / 2, dims[1] / 2, dims[2] / 2)
+                let shader = VolumeRenderShader1
+                uniforms = THREE.UniformsUtils.clone(shader.uniforms);
+
+                const texture = new THREE.DataTexture3D(volume.alpha, dims[0], dims[1], dims[2], THREE.RGBAFormat)
+                
+                texture.format = THREE.LuminanceFormat
+                texture.type = THREE.UnsignedByteType
+                texture.minFilter = texture.magFilter = THREE.LinearFilter
+
+                let cmtexture = new THREE.DataTexture(colormap, 256, 1, THREE.RGBAFormat)
+
+                uniforms['u_data'].value = texture;
+                uniforms['u_size'].value.set(dims[0], dims[1], dims[2])
+                uniforms['u_cmdata'].value = cmtexture;
+                uniforms['u_sizeEnable'].value = 0;
+                
+                uniforms['u_clim'].value.set(arg.cli_min, arg.cli_max);
+                uniforms['u_renderstyle'].value = arg.renderType;
+                // uniforms['u_renderTHRESHOLD'].value = arg.isovalue;
+                uniforms['u_sizeData'].value = null;
+
+                let material = new THREE.ShaderMaterial({
+                    uniforms: uniforms,
+                    vertexShader: shader.vertexShader,
+                    fragmentShader: shader.fragmentShader,
+                    side: THREE.BackSide
+                })
+
+                mesh = new THREE.Mesh(geo, material)
+                mesh.name = name;
+                mesh.scale.set(scale, scale, scale)
+                mesh.position.set((-dims[0] * scale) / 2, 0, (-dims[2] * scale) / 2)
+
+                this.scene.add(mesh)
             }
             else {
                 // partial parameters update
+                uniforms = mesh.material.uniforms;
+
+                uniforms["u_cmdata"].value.image = { data: colormap }
+                uniforms["u_cmdata"].value.needUpdate = true
+
+                uniforms["u_renderstyle"].value = arg.renderType;
             }
-           
+
+            if (volume.used) {
+                uniforms = mesh.material.uniforms
+                if (uniforms["u_sizeEnable"] == 0) {
+                    let texture = new THREE.DataTexture3D(volume.alpha, dims[0], dims[1], dims[2], THREE.RGBAFormat)
+                    texture.format = THREE.LuminanceFormat
+                    texture.type = THREE.UnsignedByteType
+                    texture.minFilter = texture.magFilter = THREE.LinearFilter
+
+                    uniforms["u_sizeEnable"].value = 1
+                    uniforms["u_sizeData"].value = texture
+                }
+                else {
+                    uniforms['u_sizeData'].value.image = { data: volume.sizeData }
+                    uniforms['u_sizeData'].value.needUpdate = true;
+                }
+            }
             this.renderScene()
         }
 
